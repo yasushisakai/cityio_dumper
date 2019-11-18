@@ -7,6 +7,7 @@ use regex::Regex;
 use std::{thread, time};
 use std::env;
 use dotenv::dotenv;
+use std::collections::HashMap;
 
 
 const BASE_URL: &str = "https://cityio.media.mit.edu/api";
@@ -15,15 +16,18 @@ fn main() {
 
     dotenv().ok();
 
+    let mut hashmap: HashMap<String, String> = HashMap::new();
+
     let cityio_module_key = env::var("CITYIO_MODULE_KEY").unwrap();
-    println!("{}", &cityio_module_key);
 
     let list_end_point = format!("{}/tables/list", BASE_URL);
 
-    let interval = time::Duration::from_secs(60*10);
+    let interval = time::Duration::from_secs(60 * 60); // 1H
 
     loop{
+        println!("************************");
         println!("backup start");
+        println!("************************");
         let resp: Vec<String> = reqwest::get(&list_end_point)
             .expect("Error getting table list")
             .json()
@@ -31,20 +35,15 @@ fn main() {
 
         for url in resp {
 
-            println!("{}", &url);
-
-
             let token = format!("Bearer {}", &cityio_module_key);
 
             let client = Client::new();
             let table_data: Value = client.get(&url)
                 .header(AUTHORIZATION, token)
                 .send()
-                .expect(&format!("Error getting table {}", &url))
+                .unwrap_or_else(|_| panic!("Error getting table {}", &url))
                 .json()
                 .expect("Could not parse table to json");
-
-            println!("{}", &url);
 
             // gets the last word
             let re = Regex::new(r"(\w*).$").unwrap();
@@ -54,16 +53,29 @@ fn main() {
                 tn.unwrap()
             }).unwrap();
 
+            println!("table name: {}", &table_name);
+
             let id = get_id(&table_data).unwrap();
 
+            if !hashmap.contains_key(table_name) {
+                hashmap.insert(table_name.to_string(), id.to_string());
+            } else {
+                let prev_id = hashmap.get(table_name).unwrap();
+                if prev_id == id {
+                    println!("no change since last write");    
+                    println!();
+                    continue;
+                }
+            }
             let con = connect();
-            println!("{}", &table_name);
             match send_table(&con, id, &table_name, &table_data) {
                 Ok(()) => (),
                 Err(e) => println!("{}", e),
             };
+            println!();
         }
-        println!("");
+        println!();
+        println!();
         thread::sleep(interval);
     }
 }
