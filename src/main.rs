@@ -6,15 +6,53 @@ use cs_cityio_backend::{connect, send_table};
 use regex::Regex;
 use std::{thread, time};
 use std::env;
+use std::fs::File;
+use std::path::Path;
 use dotenv::dotenv;
 use std::collections::HashMap;
+use serde::Deserialize;
+use toml;
+use std::io::prelude::*;
+use std::io::Error;
+use std::io::ErrorKind::InvalidData;
 
 
 const BASE_URL: &str = "https://cityio.media.mit.edu/api";
 
+#[derive(Debug, Deserialize)]
+struct Config {
+    interval: u64,
+}
+
+impl Config {
+    fn new (interval: u64) -> Self {
+        Self {
+            interval
+        }
+    }
+}
+
 fn main() {
 
     dotenv().ok();
+
+    // read config
+    let path = Path::new("config.toml");
+    let config = match File::open(path)
+        .and_then(|mut file| {
+            // save it to buffer
+            let mut contents: Vec<u8> = Vec::new();
+            file.read_to_end(&mut contents).unwrap();
+            Ok(contents)
+        })
+        .and_then(|c| {
+            // parse the contents to Config through toml
+            toml::from_slice::<Config>(&c).map_err(|_| Error::new(InvalidData, "invalid toml file"))
+        })
+        {
+            Ok(config) => config,
+            Err(_) => Config::new(3600)
+        };
 
     let mut hashmap: HashMap<String, String> = HashMap::new();
 
@@ -22,7 +60,8 @@ fn main() {
 
     let list_end_point = format!("{}/tables/list", BASE_URL);
 
-    let interval = time::Duration::from_secs(60 * 60); // 1H
+    let interval = time::Duration::from_secs(config.interval); // 1H
+    println!("saving every {} seconds.", &interval.as_secs());
 
     loop{
         println!("************************");
