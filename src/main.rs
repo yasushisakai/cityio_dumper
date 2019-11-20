@@ -77,12 +77,15 @@ fn main() {
             let token = format!("Bearer {}", &cityio_module_key);
 
             let client = Client::new();
-            let table_data: Value = client.get(&url)
+            let table_data: Value = match client.get(&url)
                 .header(AUTHORIZATION, token)
                 .send()
-                .unwrap_or_else(|_| panic!("Error getting table {}", &url))
-                .json()
-                .expect("Could not parse table to json");
+                // .unwrap_or_else(|_| panic!("Error getting table {}", &url))
+                .and_then(|mut table| table.json())
+                {
+                    Ok(table) => table,
+                    Err(_) => continue
+                };
 
             // gets the last word
             let re = Regex::new(r"(\w*).$").unwrap();
