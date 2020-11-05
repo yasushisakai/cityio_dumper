@@ -65,17 +65,21 @@ fn main() {
     println!("saving every {} seconds.", &interval.as_secs());
 
     loop{
+
+        thread::sleep(interval);
+
         println!("************************");
         println!("backup start");
         println!("************************");
 
+        let mut resp = match reqwest::get(&list_end_point){
+            Ok(r) => r,
+            Err(_) => continue
+        };
 
-        let resp: Vec<String> = reqwest::get(&list_end_point)
-            .expect("Error getting table list")
-            .json()
-            .expect("Could not parse table list json to data");
+        let list: Vec<String> = resp.json().expect("Could not parse table list json to data");
 
-        for url in resp {
+        for url in list {
 
             let token = format!("Bearer {}", &cityio_module_key);
 
@@ -128,7 +132,6 @@ fn main() {
         }
         println!();
         println!();
-        thread::sleep(interval);
     }
 }
 
