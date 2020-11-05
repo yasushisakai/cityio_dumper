@@ -18,6 +18,7 @@ use std::io::ErrorKind::InvalidData;
 
 
 const BASE_URL: &str = "https://cityio.media.mit.edu/api";
+// const BASE_URL: &str = "http://localhost:8080/api";
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -67,6 +68,8 @@ fn main() {
         println!("************************");
         println!("backup start");
         println!("************************");
+
+
         let resp: Vec<String> = reqwest::get(&list_end_point)
             .expect("Error getting table list")
             .json()
@@ -80,7 +83,6 @@ fn main() {
             let table_data: Value = match client.get(&url)
                 .header(AUTHORIZATION, token)
                 .send()
-                // .unwrap_or_else(|_| panic!("Error getting table {}", &url))
                 .and_then(|mut table| table.json())
                 {
                     Ok(table) => table,
@@ -90,14 +92,22 @@ fn main() {
             // gets the last word
             let re = Regex::new(r"(\w*).$").unwrap();
 
-            let table_name = re.captures(&url).map(|c| {
-                let tn = c.get(0).map(|m| m.as_str());
-                tn.unwrap()
-            }).unwrap();
+            // let table_name = re.captures(&url).map(|h|{h.get(0)}).map(|m| m.to_str());
+
+            let table_name = match re.captures(&url).and_then(|cap| cap.get(0)).map(|m| m.as_str()) {
+                Some(tn) => tn,
+                None => continue
+            };
 
             println!("table name: {}", &table_name);
 
-            let id = get_id(&table_data).unwrap();
+            let id = match get_id(&table_data) {
+                Some(id) => id,
+                None => {
+                    println!("weird... could not find the id for this table");
+                    continue
+                },
+            };
 
             if !hashmap.contains_key(table_name) {
                 hashmap.insert(table_name.to_string(), id.to_string());
@@ -105,10 +115,10 @@ fn main() {
                 let prev_id = hashmap.get(table_name).unwrap();
                 if prev_id == id {
                     println!("no change since last write");    
-                    println!();
                     continue;
                 }
             }
+
             let con = connect();
             match send_table(&con, id, &table_name, &table_data) {
                 Ok(()) => (),
@@ -129,5 +139,5 @@ fn get_id(table: &Value) -> Option<&str> {
         None => return None
     };
 
-    meta.get("id").map(|id| id.as_str().expect("Invalid String"))
+    meta.get("id").map(|id| id.as_str()).flatten()
 }
